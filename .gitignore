@@ -10,3 +10,6 @@ src/*.o
 stamp-h1
 src/slowhttptest
 
+# Rust GUI build artifacts
+gui/target/
+
