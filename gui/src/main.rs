@@ -253,11 +253,22 @@ impl App {
     }
 
     fn effective_binary(&self) -> String {
-        if self.custom_binary_path.trim().is_empty() {
-            "slowhttptest".to_owned()
-        } else {
-            self.custom_binary_path.trim().to_owned()
+        if !self.custom_binary_path.trim().is_empty() {
+            return self.custom_binary_path.trim().to_owned();
         }
+        // Look for a slowhttptest binary bundled next to this GUI executable.
+        if let Ok(exe_path) = std::env::current_exe() {
+            if let Some(dir) = exe_path.parent() {
+                #[cfg(windows)]
+                let bundled = dir.join("slowhttptest.exe");
+                #[cfg(not(windows))]
+                let bundled = dir.join("slowhttptest");
+                if bundled.exists() {
+                    return bundled.to_string_lossy().into_owned();
+                }
+            }
+        }
+        "slowhttptest".to_owned()
     }
 
     fn launch(&mut self) {

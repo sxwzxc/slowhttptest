@@ -21,21 +21,25 @@ jobs:
             target: x86_64-unknown-linux-gnu
             artifact_name: slowhttptest-gui-linux-x86_64
             binary: slowhttptest-gui
+            build_slowhttptest: true
 
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             artifact_name: slowhttptest-gui-windows-x86_64
             binary: slowhttptest-gui.exe
+            build_slowhttptest: false
 
           - os: macos-latest
             target: x86_64-apple-darwin
             artifact_name: slowhttptest-gui-macos-x86_64
             binary: slowhttptest-gui
+            build_slowhttptest: false
 
           - os: macos-latest
             target: aarch64-apple-darwin
             artifact_name: slowhttptest-gui-macos-arm64
             binary: slowhttptest-gui
+            build_slowhttptest: true
 
     steps:
       - name: Checkout
@@ -60,7 +64,23 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libgl1-mesa-dev libxcb-render0-dev libxcb-shape0-dev \
-            libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libfontconfig1-dev
+            libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libfontconfig1-dev \
+            autoconf automake g++
+
+      - name: Install macOS dependencies
+        if: matrix.os == 'macos-latest'
+        run: brew install openssl autoconf automake
+
+      - name: Build slowhttptest
+        if: matrix.build_slowhttptest
+        run: |
+          if [ "${{ matrix.os }}" = "macos-latest" ]; then
+            OPENSSL_PREFIX=$(brew --prefix openssl)
+            ./configure LDFLAGS="-L${OPENSSL_PREFIX}/lib" CPPFLAGS="-I${OPENSSL_PREFIX}/include"
+          else
+            ./configure
+          fi
+          make -C src slowhttptest
 
       - name: Build release binary
         working-directory: gui
@@ -71,7 +91,12 @@ jobs:
         run: |
           mkdir -p dist
           cp gui/target/${{ matrix.target }}/release/${{ matrix.binary }} dist/
-          tar -czf dist/${{ matrix.artifact_name }}.tar.gz -C dist ${{ matrix.binary }}
+          if [ "${{ matrix.build_slowhttptest }}" = "true" ] && [ -f "src/slowhttptest" ]; then
+            cp src/slowhttptest dist/
+            tar -czf dist/${{ matrix.artifact_name }}.tar.gz -C dist ${{ matrix.binary }} slowhttptest
+          else
+            tar -czf dist/${{ matrix.artifact_name }}.tar.gz -C dist ${{ matrix.binary }}
+          fi
 
       - name: Package binary (Windows)
         if: matrix.os == 'windows-latest'
