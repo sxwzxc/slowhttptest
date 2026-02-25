@@ -3,14 +3,8 @@ name: Build GUI
 on:
   push:
     branches: ["master"]
-    paths:
-      - "gui/**"
-      - ".github/workflows/build-gui.yml"
   pull_request:
     branches: ["master"]
-    paths:
-      - "gui/**"
-      - ".github/workflows/build-gui.yml"
   release:
     types: [published]
   workflow_dispatch:
