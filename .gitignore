@@ -13,3 +13,6 @@ src/slowhttptest
 # Rust GUI build artifacts
 gui/target/
 
+# Editor backup files
+*~
+

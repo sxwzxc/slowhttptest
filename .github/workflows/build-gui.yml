@@ -22,11 +22,6 @@ jobs:
             artifact_name: slowhttptest-gui-linux-x86_64
             binary: slowhttptest-gui
 
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            artifact_name: slowhttptest-gui-windows-x86_64
-            binary: slowhttptest-gui.exe
-
           - os: macos-latest
             target: x86_64-apple-darwin
             artifact_name: slowhttptest-gui-macos-x86_64
@@ -59,46 +54,32 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgl1-mesa-dev libxcb-render0-dev libxcb-shape0-dev \
-            libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libfontconfig1-dev
+          sudo apt-get install -y build-essential libssl-dev \
+            libgl1-mesa-dev libxcb-render0-dev libxcb-shape0-dev \
+            libxcb-xfixes0-dev libxkbcommon-dev libfontconfig1-dev
+
+      - name: Install macOS dependencies
+        if: matrix.os == 'macos-latest'
+        run: brew install openssl
 
       - name: Build release binary
         working-directory: gui
         run: cargo build --release --target ${{ matrix.target }}
 
-      - name: Package binary (Unix)
-        if: matrix.os != 'windows-latest'
+      - name: Package binary
         run: |
           mkdir -p dist
           cp gui/target/${{ matrix.target }}/release/${{ matrix.binary }} dist/
           tar -czf dist/${{ matrix.artifact_name }}.tar.gz -C dist ${{ matrix.binary }}
 
-      - name: Package binary (Windows)
-        if: matrix.os == 'windows-latest'
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path dist | Out-Null
-          Copy-Item "gui/target/${{ matrix.target }}/release/${{ matrix.binary }}" dist/
-          Compress-Archive -Path "dist/${{ matrix.binary }}" -DestinationPath "dist/${{ matrix.artifact_name }}.zip"
-
-      - name: Upload artifact (Unix)
-        if: matrix.os != 'windows-latest'
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
           path: dist/${{ matrix.artifact_name }}.tar.gz
 
-      - name: Upload artifact (Windows)
-        if: matrix.os == 'windows-latest'
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.artifact_name }}
-          path: dist/${{ matrix.artifact_name }}.zip
-
       - name: Upload to Release
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            dist/${{ matrix.artifact_name }}.tar.gz
-            dist/${{ matrix.artifact_name }}.zip
+          files: dist/${{ matrix.artifact_name }}.tar.gz
