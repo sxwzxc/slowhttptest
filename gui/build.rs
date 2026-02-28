@@ -75,7 +75,8 @@ fn main() {
         status.code()
     );
 
-    // Strip the binary to reduce embedded size
+    // Strip the binary to reduce embedded size (optional – not all platforms
+    // have strip, so a failure is non-fatal but worth noting).
     let built_binary = build_dir.join("src").join("slowhttptest");
     assert!(
         built_binary.exists(),
@@ -83,9 +84,21 @@ fn main() {
         built_binary.display()
     );
 
-    let _ = Command::new("strip")
-        .arg(&built_binary)
-        .status();
+    match Command::new("strip").arg(&built_binary).status() {
+        Ok(s) if s.success() => {}
+        Ok(s) => {
+            println!(
+                "cargo:warning=strip exited with status {} – binary will not be stripped",
+                s
+            );
+        }
+        Err(e) => {
+            println!(
+                "cargo:warning=strip not available ({}), binary will not be stripped",
+                e
+            );
+        }
+    }
 
     std::fs::copy(&built_binary, &binary_path).expect("Failed to copy slowhttptest to OUT_DIR");
 }

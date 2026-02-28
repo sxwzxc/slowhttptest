@@ -19,24 +19,45 @@ use eframe::egui;
 /// Raw bytes of the slowhttptest binary produced by build.rs.
 const EMBEDDED_BINARY: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/slowhttptest"));
 
+/// Simple FNV-1a hash to create a version-specific directory name.
+fn fnv1a_hash(data: &[u8]) -> u64 {
+    let mut h: u64 = 0xcbf29ce484222325;
+    for &b in data {
+        h ^= b as u64;
+        h = h.wrapping_mul(0x100000001b3);
+    }
+    h
+}
+
 /// Extract the embedded binary to a temporary directory and return its path.
 /// Returns `None` if the embedded payload is empty (non-Unix build) or on I/O
-/// errors.
+/// errors.  A hash of the payload is used in the directory name so that
+/// different builds never collide, and an existing correct extraction is
+/// reused without re-writing.
 fn extract_embedded_binary() -> Option<String> {
     if EMBEDDED_BINARY.is_empty() {
         return None;
     }
 
-    let dir = std::env::temp_dir().join("slowhttptest-gui");
+    let hash = fnv1a_hash(EMBEDDED_BINARY);
+    let dir = std::env::temp_dir().join(format!("slowhttptest-gui-{:016x}", hash));
     std::fs::create_dir_all(&dir).ok()?;
     let path = dir.join("slowhttptest");
 
-    std::fs::write(&path, EMBEDDED_BINARY).ok()?;
+    // Only extract if the file does not already exist with the right size.
+    let needs_write = match std::fs::metadata(&path) {
+        Ok(meta) => meta.len() != EMBEDDED_BINARY.len() as u64,
+        Err(_) => true,
+    };
 
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).ok()?;
+    if needs_write {
+        std::fs::write(&path, EMBEDDED_BINARY).ok()?;
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).ok()?;
+        }
     }
 
     Some(path.to_string_lossy().into_owned())
