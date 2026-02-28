@@ -1,5 +1,6 @@
 // SlowHTTPTest GUI - A graphical frontend for slowhttptest
-// Allows users to configure and launch slowhttptest from a visual interface.
+// The slowhttptest binary is compiled and embedded at build time so that
+// this single GUI executable is fully self-contained on Unix platforms.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -10,6 +11,36 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 
 use eframe::egui;
+
+// ---------------------------------------------------------------------------
+// Embedded slowhttptest binary
+// ---------------------------------------------------------------------------
+
+/// Raw bytes of the slowhttptest binary produced by build.rs.
+const EMBEDDED_BINARY: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/slowhttptest"));
+
+/// Extract the embedded binary to a temporary directory and return its path.
+/// Returns `None` if the embedded payload is empty (non-Unix build) or on I/O
+/// errors.
+fn extract_embedded_binary() -> Option<String> {
+    if EMBEDDED_BINARY.is_empty() {
+        return None;
+    }
+
+    let dir = std::env::temp_dir().join("slowhttptest-gui");
+    std::fs::create_dir_all(&dir).ok()?;
+    let path = dir.join("slowhttptest");
+
+    std::fs::write(&path, EMBEDDED_BINARY).ok()?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).ok()?;
+    }
+
+    Some(path.to_string_lossy().into_owned())
+}
 
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
@@ -107,6 +138,7 @@ struct App {
     output: Arc<Mutex<String>>,
     running: Arc<Mutex<bool>>,
     custom_binary_path: String,
+    embedded_binary_path: Option<String>,
 }
 
 impl Default for App {
@@ -147,6 +179,7 @@ impl Default for App {
             output: Arc::new(Mutex::new(String::new())),
             running: Arc::new(Mutex::new(false)),
             custom_binary_path: String::new(),
+            embedded_binary_path: extract_embedded_binary(),
         }
     }
 }
@@ -253,10 +286,12 @@ impl App {
     }
 
     fn effective_binary(&self) -> String {
-        if self.custom_binary_path.trim().is_empty() {
-            "slowhttptest".to_owned()
-        } else {
+        if !self.custom_binary_path.trim().is_empty() {
             self.custom_binary_path.trim().to_owned()
+        } else if let Some(ref path) = self.embedded_binary_path {
+            path.clone()
+        } else {
+            "slowhttptest".to_owned()
         }
     }
 
@@ -288,7 +323,8 @@ impl App {
                 Err(e) => {
                     let mut o = output.lock().unwrap();
                     writeln!(o, "[ERROR] Failed to start '{}': {}", binary, e).ok();
-                    writeln!(o, "  Make sure slowhttptest is installed and in your PATH,").ok();
+                    writeln!(o, "  If the embedded binary is not available, make sure").ok();
+                    writeln!(o, "  slowhttptest is installed and in your PATH,").ok();
                     writeln!(o, "  or set a custom binary path above.").ok();
                 }
                 Ok(mut child) => {
@@ -405,9 +441,14 @@ impl App {
                 });
                 ui.horizontal(|ui| {
                     ui.label("Binary path:");
+                    let hint = if self.embedded_binary_path.is_some() {
+                        "using embedded binary (override here)"
+                    } else {
+                        "slowhttptest  (leave blank to use PATH)"
+                    };
                     ui.add(
                         egui::TextEdit::singleline(&mut self.custom_binary_path)
-                            .hint_text("slowhttptest  (leave blank to use PATH)"),
+                            .hint_text(hint),
                     );
                 });
             });
