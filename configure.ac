@@ -8,8 +8,15 @@ AC_CONFIG_SRCDIR([src/slowhttptest.cc])
 AC_CONFIG_HEADERS([config.h])
 AM_INIT_AUTOMAKE
 
-LDFLAGS="$LDFLAGS -L/usr/local/opt/openssl/lib"
-CPPFLAGS="$CPPFLAGS -I/usr/local/opt/openssl/include"
+if test "$(uname)" = "Darwin"; then
+  for openssl_prefix in /opt/homebrew/opt/openssl@3 /opt/homebrew/opt/openssl /usr/local/opt/openssl@3 /usr/local/opt/openssl; do
+    if test -d "$openssl_prefix/lib"; then
+      LDFLAGS="$LDFLAGS -L${openssl_prefix}/lib"
+      CPPFLAGS="$CPPFLAGS -I${openssl_prefix}/include"
+      break
+    fi
+  done
+fi
 
 # Checks for programs.
 AC_PROG_CXX

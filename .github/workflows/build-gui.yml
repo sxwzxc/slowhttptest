@@ -60,7 +60,12 @@ jobs:
 
       - name: Install macOS dependencies
         if: matrix.os == 'macos-latest'
-        run: brew install openssl
+        run: |
+          brew list openssl@3 &>/dev/null || brew install openssl@3
+          OPENSSL_PREFIX=$(brew --prefix openssl@3)
+          echo "LDFLAGS=-L${OPENSSL_PREFIX}/lib" >> $GITHUB_ENV
+          echo "CPPFLAGS=-I${OPENSSL_PREFIX}/include" >> $GITHUB_ENV
+          echo "PKG_CONFIG_PATH=${OPENSSL_PREFIX}/lib/pkgconfig" >> $GITHUB_ENV
 
       - name: Build release binary
         working-directory: gui
